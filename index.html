@@ -117,9 +117,10 @@
         }
 
         .hero__cupimg {
-          width: min(150vw, 3000px);
+          width: min(75vw, 1300px);
           min-width: 360px;
-          margin-left: 0%
+          margin-left: 5vw;
+          margin-right: -25vw;
         }
 
         .stack-card {
@@ -147,6 +148,7 @@
             width: 100% !important;
             min-width: 0 !important;
             margin-left: 0 !important;
+            margin-right: 0 !important;
             animation: floatCup 3.8s ease-in-out infinite alternate
           }
 
@@ -229,7 +231,7 @@
           style="position:relative;z-index:2;display:flex;align-items:center;justify-content:center">
           <div ref="{{ cupRef }}" style="will-change:transform">
             <img class="hero__cupimg" src="uploads/Taza cafe.png" alt="Taza de café de especialidad con latte art"
-              style="display:block;max-width:100%;filter:drop-shadow(0 40px 60px rgba(0,0,0,.6));animation:floatCup 3.8s ease-in-out infinite alternate">
+              style="display:block;max-width:none;filter:drop-shadow(0 40px 60px rgba(0,0,0,.6));animation:floatCup 3.8s ease-in-out infinite alternate">
           </div>
         </div>
         <div class="hero__text"
