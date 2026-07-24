@@ -230,14 +230,14 @@
           <img src="uploads/Grano%20Cafe.png" alt="" style="width:100%;height:100%;object-fit:cover;opacity:.85">
         </div>
         <div class="hero__cup"
-          style="position:relative;z-index:2;display:flex;align-items:center;justify-content:center">
+          style="position:relative;z-index:4;display:flex;align-items:center;justify-content:center">
           <div ref="{{ cupRef }}" style="will-change:transform">
             <img class="hero__cupimg" src="uploads/Taza%20cafe.png" alt="Taza de café de especialidad con latte art"
               style="display:block;max-width:none;filter:drop-shadow(0 40px 60px rgba(0,0,0,.6));animation:floatCup 3.8s ease-in-out infinite alternate">
           </div>
         </div>
         <div class="hero__text"
-          style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:26px;max-width:560px;justify-self:center">
+          style="position:relative;z-index:7;display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:26px;max-width:560px;justify-self:center;transform:translateY(-90px)">
           <h1 class="hero__title"
             style="margin:0;font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;color:#8B5E3C;line-height:.96;letter-spacing:6px;font-size:clamp(64px,8.5vw,150px);text-wrap:balance">
             <span style="display:block;overflow:hidden;padding-bottom:.04em"><span
@@ -246,10 +246,10 @@
                 style="display:block;animation:riseIn 1s cubic-bezier(.22,1,.36,1) .3s both">Coffee</span></span>
           </h1>
           <div class="arrow-row"
-            style="display:flex;align-items:center;gap:18px;animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .75s both">
-            <div class="arrow-wrapper" style="position: relative; width: 60px; height: 60px; flex: none; transform: translate(-25px, 60px) rotate(-20deg);">
+            style="display:flex;align-items:center;position:relative;animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .75s both">
+            <div class="arrow-wrapper" style="position: absolute; right: 100%; margin-right: 120px; top: -5px; width: 60px; height: 60px; flex: none; transform: rotate(0deg);">
               <img src="uploads/FLECHA.png" alt="" aria-hidden="true"
-                style="position: absolute; left: 50%; top: 50%; width: 450px; max-width: none; transform: translate(-50%, -50%); mix-blend-mode: screen; pointer-events: none;">
+                style="position: absolute; left: 50%; top: 50%; width: 330px; max-width: none; transform: translate(-50%, -50%); mix-blend-mode: screen; pointer-events: none;">
             </div>
             <p
               style="margin:0;font-family:'Caveat',cursive;font-weight:600;font-size:clamp(26px,2.6vw,38px);letter-spacing:4px;color:#F5EDDD;text-transform:uppercase">
@@ -257,12 +257,12 @@
           </div>
         </div>
         <div ref="{{ beansNearRef }}" class="beans-near"
-          style="position:absolute;inset:-12%;pointer-events:none;will-change:transform;filter:blur(7px);transform:scale(1.25)">
+          style="position:absolute;inset:-12%;pointer-events:none;will-change:transform;transform:scale(1.25);z-index:6">
           <img src="uploads/Grano%20Cafe.png" alt=""
             style="width:100%;height:100%;object-fit:cover;opacity:.55;transform:scaleX(-1)">
         </div>
         <div class="hero__marquee"
-          style="position:absolute;left:-6vw;right:-6vw;bottom:9vh;z-index:3;transform:rotate(-4deg);background:#6F4425;box-shadow:0 18px 50px rgba(0,0,0,.5);overflow:hidden;pointer-events:none">
+          style="position:absolute;left:-6vw;right:-6vw;bottom:22vh;z-index:3;transform:rotate(-4deg);background:#6F4425;box-shadow:0 18px 50px rgba(0,0,0,.5);overflow:hidden;pointer-events:none">
           <div style="display:flex;width:max-content;animation:marquee 22s linear infinite">
             <span
               style="display:flex;gap:70px;padding:16px 35px;white-space:nowrap;font-family:'Jost',sans-serif;font-weight:600;font-size:22px;letter-spacing:4px;color:#F5EDDD">
