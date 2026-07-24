@@ -129,19 +129,22 @@
 
         @media(max-width:860px) {
           .hero {
-            display: block !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
             position: relative;
             min-height: 94vh !important;
-            padding: 104px 5vw 130px !important
+            padding: 104px 5vw 130px !important;
+            overflow: hidden !important;
           }
 
           .hero__cup {
-            position: absolute !important;
+            position: relative !important;
             left: -15vw;
-            bottom: 15vh;
             width: 120vw;
             z-index: 4;
-            margin: 0
+            margin: auto 0 0 0 !important;
+            order: 2 !important;
           }
 
           .hero__cupimg {
@@ -153,17 +156,18 @@
           }
 
           .hero__text {
-            position: absolute !important;
-            top: 120px;
-            right: 5vw;
-            left: auto;
+            position: relative !important;
+            top: auto !important;
+            right: auto !important;
+            left: auto !important;
             align-items: flex-end !important;
             text-align: right;
-            max-width: 85vw;
-            width: auto;
+            width: 100%;
+            max-width: none !important;
             gap: 14px !important;
             z-index: 5;
             transform: none !important;
+            order: 1 !important;
           }
 
           .hero__title {
@@ -188,13 +192,13 @@
           }
 
           .hero__text .arrow-row .arrow-wrapper {
-            transform: rotate(5deg) translateY(-5px) !important;
-            margin-right: 20px !important;
+            transform: scale(0.6) rotate(15deg) translateY(-5px) !important;
+            margin-right: 15px !important;
             right: 100% !important;
-            top: 5px !important;
+            top: auto !important;
           }
           .hero__text .arrow-row img {
-            width: 180px !important;
+            
           }
 
           .beans-far {
