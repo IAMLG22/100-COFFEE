@@ -15,6 +15,7 @@
       <link
         href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Jost:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Caveat:wght@500;600&display=swap"
         rel="stylesheet">
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
       <style>
         html {
           scroll-behavior: smooth
@@ -138,11 +139,15 @@
             overflow: hidden !important;
           }
 
+          /* La taza sube y crece un 12%: con el tamaño anterior sobraban 107px de aire en la
+             banda flecha→marquesina, así que moverla solo cambiaba el hueco de sitio.
+             `bottom` (y no translateY) porque .hero__cupimg ya usa transform en floatCup.
+             `left:0` recentra el café visible: el PNG lleva 645px transparentes a la derecha. */
           .hero__cup {
             position: absolute !important;
-            left: 5vw !important;
-            bottom: 10vh !important;
-            width: 120vw !important;
+            left: 0 !important;
+            bottom: 14vh !important;
+            width: 134vw !important;
             z-index: 4;
             margin: 0 !important;
           }
@@ -190,10 +195,13 @@
             margin-bottom: 0 !important;
           }
 
+          /* La punta de la flecha cae en (centro del wrapper) + (-6px, -27px) y su tinta
+             se extiende 33px por encima. Con top:31px la punta queda ~11px bajo
+             "CAFÉ DE ESPECIALIDAD" y la curva deja de invadir la línea de texto. */
           .hero__text .arrow-row .arrow-wrapper {
             position: absolute !important;
             right: 60px !important;
-            top: 35px !important;
+            top: 31px !important;
             margin: 0 !important;
             transform: scale(0.4) rotate(-110deg) !important;
           }
@@ -234,6 +242,473 @@
           .stack-card {
             top: 84px !important;
             height: 60vh !important
+          }
+        }
+
+        /* ═══════════════ LA CARTA — experiencia interactiva ═══════════════ */
+
+        /* Escenario: contenedor que cruza entre la vista de categorías y la de productos */
+        .carta-stage {
+          position: relative
+        }
+
+        .carta-view {
+          transition: opacity .42s cubic-bezier(.32, .72, 0, 1), transform .52s cubic-bezier(.32, .72, 0, 1);
+          will-change: opacity, transform
+        }
+
+        .carta-view[data-fase="saliendo"] {
+          opacity: 0;
+          transform: scale(.965) translateY(12px)
+        }
+
+        .carta-view[data-fase="entrando"] {
+          opacity: 0;
+          transform: scale(1.035) translateY(-10px)
+        }
+
+        .carta-view[data-fase="idle"] {
+          opacity: 1;
+          transform: none
+        }
+
+        .carta-view:not([data-fase="idle"]) {
+          pointer-events: none
+        }
+
+        @keyframes cartaPop {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(.955)
+          }
+
+          to {
+            opacity: 1;
+            transform: none
+          }
+        }
+
+        /* Entrada escalonada: se re-dispara cada vez que la vista vuelve a "idle".
+           fill-mode "backwards" deja el transform libre al terminar → el :hover sigue vivo. */
+        .carta-view[data-fase="idle"] .cat-card,
+        .carta-view[data-fase="idle"] .p-card {
+          animation: cartaPop .62s cubic-bezier(.32, .72, 0, 1) backwards;
+          animation-delay: calc(var(--i, 0) * 32ms)
+        }
+
+        /* ── Estado inicial: cuadrícula de 6 categorías ── */
+        .cat-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 18px;
+          max-width: 900px;
+          margin: 0 auto
+        }
+
+        .cat-card {
+          position: relative;
+          overflow: hidden;
+          aspect-ratio: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 18px;
+          padding: 24px;
+          cursor: pointer;
+          font: inherit;
+          text-align: center;
+          -webkit-appearance: none;
+          appearance: none;
+          -webkit-tap-highlight-color: transparent;
+          border: 1px solid rgba(224, 178, 124, .18);
+          border-radius: 30px;
+          background: linear-gradient(158deg, #2E1D11 0%, #180D06 58%, #100804 100%);
+          color: #F1E7D6;
+          box-shadow: 0 18px 44px rgba(30, 17, 9, .22);
+          transition: transform .5s cubic-bezier(.32, .72, 0, 1), box-shadow .5s cubic-bezier(.32, .72, 0, 1), border-color .4s ease
+        }
+
+        .cat-card::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(120% 78% at 50% 0%, rgba(224, 178, 124, .20), rgba(224, 178, 124, 0) 62%);
+          opacity: 0;
+          transition: opacity .5s ease;
+          pointer-events: none
+        }
+
+        .cat-card:hover {
+          transform: translateY(-8px);
+          border-color: rgba(224, 178, 124, .52);
+          box-shadow: 0 30px 62px rgba(30, 17, 9, .34)
+        }
+
+        .cat-card:hover::after {
+          opacity: 1
+        }
+
+        .cat-card:active {
+          transform: translateY(-3px) scale(.985)
+        }
+
+        .cat-card:focus-visible {
+          outline: 2px solid #E0B27C;
+          outline-offset: 3px
+        }
+
+        /* Ilustraciones de categoría: PNG con transparencia real, así que no hace falta
+           mix-blend-mode — se recortan solas sobre la tarjeta oscura. */
+        /* Caja cuadrada + contain: las ilustraciones verticales (botella) y horizontales
+           (bocadillo) acaban con un peso óptico parecido dentro de la tarjeta. */
+        .cat-card__img {
+          position: relative;
+          display: block;
+          width: clamp(84px, 11vw, 118px);
+          height: clamp(84px, 11vw, 118px);
+          object-fit: contain;
+          filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .45));
+          transition: transform .55s cubic-bezier(.32, .72, 0, 1)
+        }
+
+        .cat-card:hover .cat-card__img {
+          transform: translateY(-5px) scale(1.07)
+        }
+
+        .cat-card__name {
+          position: relative;
+          font-family: 'Oswald', sans-serif;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 3.5px;
+          font-size: clamp(15px, 1.5vw, 19px);
+          line-height: 1
+        }
+
+        /* ── Vista de productos ── */
+        .carta-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 18px;
+          margin-bottom: 32px
+        }
+
+        .btn-volver {
+          display: inline-flex;
+          align-items: center;
+          gap: 11px;
+          cursor: pointer;
+          font-family: 'Oswald', sans-serif;
+          font-size: 13px;
+          font-weight: 500;
+          letter-spacing: 2.5px;
+          text-transform: uppercase;
+          padding: 13px 26px 13px 20px;
+          border-radius: 999px;
+          border: 1px solid rgba(38, 22, 14, .14);
+          background: #26160E;
+          color: #F1E7D6;
+          -webkit-tap-highlight-color: transparent;
+          transition: transform .42s cubic-bezier(.32, .72, 0, 1), box-shadow .42s ease, background .3s ease
+        }
+
+        .btn-volver:hover {
+          background: #3A2113;
+          transform: translateX(-4px);
+          box-shadow: 0 14px 32px rgba(38, 22, 14, .24)
+        }
+
+        .btn-volver:focus-visible {
+          outline: 2px solid #A96C2C;
+          outline-offset: 3px
+        }
+
+        .btn-volver svg {
+          flex: none;
+          transition: transform .42s cubic-bezier(.32, .72, 0, 1)
+        }
+
+        .btn-volver:hover svg {
+          transform: translateX(-3px)
+        }
+
+        .carta-cat-title {
+          margin: 0;
+          font-family: 'Oswald', sans-serif;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 3px;
+          font-size: clamp(20px, 2.4vw, 30px);
+          color: #26160E
+        }
+
+        .carta-seccion+.carta-seccion {
+          margin-top: 40px
+        }
+
+        .carta-seccion__tit {
+          margin: 0 0 18px;
+          font-family: 'Oswald', sans-serif;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          font-size: 22px;
+          color: #A96C2C
+        }
+
+        .p-grid {
+          display: grid;
+          gap: 14px;
+          align-items: stretch
+        }
+
+        .p-card {
+          background: #FBF5E9;
+          border: 1px solid rgba(38, 22, 14, .08);
+          border-radius: 20px;
+          padding: 20px 22px;
+          display: flex;
+          gap: 16px;
+          transition: transform .45s cubic-bezier(.32, .72, 0, 1), box-shadow .45s ease, border-color .35s ease
+        }
+
+        .p-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 20px 44px rgba(38, 22, 14, .14);
+          border-color: rgba(169, 108, 44, .32)
+        }
+
+        /* Café / Chocolate / Bebidas: texto a la izquierda, recipiente + ml a la derecha */
+        .p-card--vaso {
+          align-items: stretch
+        }
+
+        .p-card--simple {
+          flex-direction: column;
+          gap: 12px
+        }
+
+        .p-card__info {
+          flex: 1 1 auto;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+          text-align: left
+        }
+
+        .p-card__name {
+          margin: 0;
+          font-family: 'Oswald', sans-serif;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          font-size: 16.5px;
+          line-height: 1.22;
+          color: #26160E
+        }
+
+        .p-card__desc {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 300;
+          line-height: 1.5;
+          color: #7A6349
+        }
+
+        .p-card__vasos {
+          flex: 0 0 auto;
+          align-self: flex-end;
+          display: flex;
+          align-items: flex-end;
+          gap: 12px
+        }
+
+        .p-vaso {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1px
+        }
+
+        .p-vaso__art {
+          display: block;
+          width: clamp(42px, 4.2vw, 56px);
+          height: auto;
+          overflow: visible;
+          filter: drop-shadow(0 6px 8px rgba(38, 22, 14, .10));
+          transition: transform .45s cubic-bezier(.32, .72, 0, 1)
+        }
+
+        .p-card:hover .p-vaso__art {
+          transform: translateY(-3px)
+        }
+
+        .p-vaso__ml {
+          margin-top: 3px;
+          font-size: 10.5px;
+          letter-spacing: 1.6px;
+          text-transform: uppercase;
+          white-space: nowrap;
+          color: #8A7157
+        }
+
+        .p-vaso__precio {
+          font-family: 'Oswald', sans-serif;
+          font-weight: 500;
+          font-size: 15px;
+          color: #26160E
+        }
+
+        .p-card__tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: auto;
+          padding-top: 2px
+        }
+
+        .p-tag {
+          display: inline-flex;
+          align-items: baseline;
+          gap: 8px;
+          padding: 6px 13px;
+          border-radius: 999px;
+          background: rgba(38, 22, 14, .05);
+          border: 1px solid rgba(38, 22, 14, .07);
+          transition: background .3s ease, border-color .3s ease
+        }
+
+        .p-card:hover .p-tag {
+          background: rgba(169, 108, 44, .10);
+          border-color: rgba(169, 108, 44, .20)
+        }
+
+        .p-tag em {
+          font-style: normal;
+          font-size: 10.5px;
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          color: #8A7157
+        }
+
+        .p-tag b {
+          font-family: 'Oswald', sans-serif;
+          font-weight: 500;
+          font-size: 14.5px;
+          color: #26160E
+        }
+
+        @media(max-width:700px) {
+          .cat-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px
+          }
+
+          .cat-card {
+            border-radius: 24px;
+            gap: 14px;
+            padding: 18px
+          }
+
+          .cat-card__name {
+            letter-spacing: 2.5px
+          }
+        }
+
+        @media(max-width:560px) {
+          .p-card {
+            padding: 16px 17px;
+            gap: 12px
+          }
+
+          .p-card__vasos {
+            gap: 9px
+          }
+
+          .carta-toolbar {
+            gap: 12px
+          }
+        }
+
+        @media(prefers-reduced-motion:reduce) {
+
+          .carta-view,
+          .cat-card,
+          .cat-card__icon,
+          .p-card,
+          .p-vaso__art,
+          .btn-volver {
+            transition: none !important;
+            animation: none !important
+          }
+        }
+
+        /* ═══════════════ Reseñas — CTA "Dejar una reseña" ═══════════════ */
+        /* Columna que agrupa la insignia de Google y el botón. Solo afecta a la
+           cabecera de la sección; el stack animado de tarjetas queda intacto. */
+        .resenas-cta {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 14px
+        }
+
+        .leave-review-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          align-self: flex-end;
+          padding: 13px 26px;
+          border-radius: 50px;
+          border: 1px solid #2d2422;
+          background: transparent;
+          font-family: 'Jost', sans-serif;
+          font-size: 0.85rem;
+          font-weight: 600;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          color: #2d2422;
+          white-space: nowrap;
+          -webkit-tap-highlight-color: transparent;
+          transition: all 0.3s ease
+        }
+
+        .leave-review-btn svg {
+          width: 16px;
+          height: 16px;
+          flex: none
+        }
+
+        /* El icono hereda el color por currentColor, así que cambia solo en el hover. */
+        .leave-review-btn:hover,
+        .leave-review-btn:focus-visible {
+          background: #2d2422;
+          color: #F1E7D6
+        }
+
+        .leave-review-btn:focus-visible {
+          outline: 2px solid #A96C2C;
+          outline-offset: 3px
+        }
+
+        .leave-review-btn:active {
+          transform: scale(.97)
+        }
+
+        @media(max-width:720px) {
+          .leave-review-btn {
+            align-self: stretch
+          }
+        }
+
+        @media(prefers-reduced-motion:reduce) {
+          .leave-review-btn {
+            transition: none !important
           }
         }
       </style>
@@ -314,50 +789,84 @@
             especialidad, dulces horneados a diario y desayunos de barrio. Precios en euros, IVA incluido.</p>
         </div>
 
-        <sc-if value="{{ mostrarTabs }}" hint-placeholder-val="{{ true }}">
-          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:36px">
-            <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="6">
-              <button onClick="{{ tab.pick }}"
-                style="cursor:pointer;font-family:'Oswald',sans-serif;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;padding:11px 24px;border-radius:999px;border:1px solid rgba(38,22,14,.25);background:{{ tab.bg }};color:{{ tab.fg }};transition:all .25s"
-                style-hover="border-color:#A96C2C;transform:translateY(-2px)">{{ tab.label }}</button>
-            </sc-for>
-          </div>
-        </sc-if>
+        <div class="carta-stage">
+          <div class="carta-view" data-fase="{{ fase }}">
 
-        <sc-for list="{{ secciones }}" as="sec" hint-placeholder-count="1">
-          <div style="margin-bottom:44px">
-            <sc-if value="{{ sec.mostrarTitulo }}" hint-placeholder-val="{{ false }}">
-              <h3
-                style="margin:0 0 20px;font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:2px;font-size:22px;color:#A96C2C">
-                {{ sec.titulo }}</h3>
+            <!-- Estado inicial: cuadrícula central de 6 categorías -->
+            <sc-if value="{{ verCategorias }}" hint-placeholder-val="{{ true }}">
+              <div class="cat-grid">
+                <sc-for list="{{ categorias }}" as="c" hint-placeholder-count="6">
+                  <button type="button" class="cat-card" onClick="{{ c.abrir }}" aria-label="{{ c.aria }}"
+                    style="--i:{{ c.i }}">
+                    <img class="cat-card__img" src="{{ c.img }}" alt="" loading="lazy" decoding="async">
+                    <span class="cat-card__name">{{ c.label }}</span>
+                  </button>
+                </sc-for>
+              </div>
             </sc-if>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px">
-              <sc-for list="{{ sec.grupos }}" as="g" hint-placeholder-count="6">
-                <article
-                  style="background:#FBF5E9;color:#26160E;border:1px solid rgba(38,22,14,.08);border-radius:18px;padding:22px 24px;display:flex;flex-direction:column;gap:10px;transition:transform .25s,box-shadow .25s"
-                  style-hover="transform:translateY(-4px);box-shadow:0 18px 40px rgba(38,22,14,.16)">
-                  <h4
-                    style="margin:0;font-family:'Oswald',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:1px;font-size:17px;line-height:1.25">
-                    {{ g.nombre }}</h4>
-                  <sc-if value="{{ g.desc }}" hint-placeholder-val="{{ false }}">
-                    <p style="margin:0;font-size:13.5px;font-weight:300;line-height:1.5;color:#6b5340">{{ g.desc }}</p>
+
+            <!-- Vista revelada: todos los productos de la categoría, de un solo vistazo -->
+            <sc-if value="{{ verProductos }}" hint-placeholder-val="{{ false }}">
+              <sc-if value="{{ mostrarVolver }}" hint-placeholder-val="{{ true }}">
+                <div class="carta-toolbar">
+                  <button type="button" class="btn-volver" onClick="{{ volver }}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="20" y1="12" x2="5" y2="12"></line>
+                      <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Volver a categorías
+                  </button>
+                  <p class="carta-cat-title">{{ catActiva }}</p>
+                </div>
+              </sc-if>
+
+              <sc-for list="{{ secciones }}" as="sec" hint-placeholder-count="1">
+                <div class="carta-seccion">
+                  <sc-if value="{{ sec.mostrarTitulo }}" hint-placeholder-val="{{ false }}">
+                    <h3 class="carta-seccion__tit">{{ sec.titulo }}</h3>
                   </sc-if>
-                  <div style="display:flex;flex-direction:column;gap:7px;margin-top:auto;padding-top:6px">
-                    <sc-for list="{{ g.variantes }}" as="va" hint-placeholder-count="2">
-                      <div style="display:flex;align-items:baseline;gap:10px">
-                        <span style="font-size:13px;color:#8a7157">{{ va.etiqueta }}</span>
-                        <span
-                          style="flex:1;border-bottom:1px dotted rgba(38,22,14,.35);transform:translateY(-4px)"></span>
-                        <span style="font-family:'Oswald',sans-serif;font-size:16px;font-weight:500">{{ va.precio
-                          }}</span>
-                      </div>
+                  <div class="p-grid" style="grid-template-columns:repeat(auto-fill,minmax({{ sec.min }},1fr))">
+                    <sc-for list="{{ sec.grupos }}" as="g" hint-placeholder-count="6">
+                      <article class="{{ g.clase }}" style="--i:{{ g.i }}">
+                        <div class="p-card__info">
+                          <h4 class="p-card__name">{{ g.nombre }}</h4>
+                          <sc-if value="{{ g.desc }}" hint-placeholder-val="{{ false }}">
+                            <p class="p-card__desc">{{ g.desc }}</p>
+                          </sc-if>
+                          <sc-if value="{{ g.simple }}" hint-placeholder-val="{{ false }}">
+                            <div class="p-card__tags">
+                              <sc-for list="{{ g.variantes }}" as="va" hint-placeholder-count="2">
+                                <span class="p-tag">
+                                  <sc-if value="{{ va.etiqueta }}" hint-placeholder-val="{{ true }}"><em>{{ va.etiqueta
+                                      }}</em></sc-if>
+                                  <b>{{ va.precio }}</b>
+                                </span>
+                              </sc-for>
+                            </div>
+                          </sc-if>
+                        </div>
+                        <sc-if value="{{ g.conVaso }}" hint-placeholder-val="{{ true }}">
+                          <div class="p-card__vasos">
+                            <sc-for list="{{ g.variantes }}" as="va" hint-placeholder-count="2">
+                              <div class="p-vaso">
+                                {{ va.vaso }}
+                                <sc-if value="{{ va.etiqueta }}" hint-placeholder-val="{{ true }}"><span
+                                    class="p-vaso__ml">{{ va.etiqueta }}</span></sc-if>
+                                <span class="p-vaso__precio">{{ va.precio }}</span>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                      </article>
                     </sc-for>
                   </div>
-                </article>
+                </div>
               </sc-for>
-            </div>
+            </sc-if>
+
           </div>
-        </sc-for>
+        </div>
       </section>
 
       <section id="comunidad" data-screen-label="Comunidad"
@@ -493,6 +1002,7 @@
               style="margin:0;font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase;font-size:clamp(34px,4vw,58px);line-height:1.02">
               Un muro<br>de amor</h2>
           </div>
+          <div class="resenas-cta">
           <div
             style="display:flex;align-items:center;gap:16px;background:#FBF5E9;border:1px solid rgba(38,22,14,.10);border-radius:18px;padding:18px 24px;box-shadow:0 10px 30px rgba(38,22,14,.06)">
             <svg width="34" height="34" viewBox="0 0 48 48" aria-label="Google">
@@ -514,6 +1024,15 @@
               <p style="margin:2px 0 0;font-size:14px;color:#6b5340"><span
                   style="color:#E8A33D;letter-spacing:2px">★★★★★</span> &nbsp;Reseñas reales de clientes</p>
             </div>
+          </div>
+          <a class="leave-review-btn" href="https://search.google.com/local/writereview?placeid=ChIJHcmBCdv5cg0RgC_fr3Tf5fY"
+            target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.9l2.85 5.78 6.38.93-4.62 4.5 1.09 6.35L12 17.46l-5.7 3-1.09-6.35L.59 9.61l6.38-.93z"></path>
+            </svg>
+            Dejar una reseña
+          </a>
           </div>
         </div>
 
@@ -639,18 +1158,284 @@
     </div>
   </x-dc>
   <script type="text/x-dc" data-dc-script data-props="{
-  &quot;categoriaInicial&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Café&quot;, &quot;Chocolate&quot;, &quot;Bebidas&quot;, &quot;Pitufos&quot;, &quot;Dulces&quot;, &quot;Tartas&quot;], &quot;default&quot;: &quot;Café&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Carta&quot;},
+  &quot;categoriaInicial&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Ninguna&quot;, &quot;Café&quot;, &quot;Chocolate&quot;, &quot;Bebidas&quot;, &quot;Pitufos&quot;, &quot;Dulces&quot;, &quot;Tartas&quot;], &quot;default&quot;: &quot;Ninguna&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Carta&quot;},
   &quot;cartaCompleta&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Carta&quot;}
 }">
+const R = React.createElement;
+
+// ── Origen de datos: CSV publicado de Google Sheets ────────────────────────
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTC_JR_C8vcMH6UPpyzRJNL6MMOT7mALLY5yrmYey8x9Zy2TIY2jAT3L6lSfPcczq6pc_A8BhUkUxOH/pub?gid=498285104&single=true&output=csv';
+const COLS = { cat: 'Categoría', prod: 'Producto', var: 'Variante/Tamaño', precio: 'Precio (€)' };
+
+// Clave estable: minúsculas, sin tildes y sin signos. Sirve para casar los nombres
+// que escribe el cliente en la hoja con los mapas locales (ilustraciones, tazas, descripciones).
+const clave = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '');
+
+// La hoja escribe algunos productos distinto a los mapas locales ("Cold Breu" vs
+// "Cold Brew", "Bayleys" vs "Baileys"…). Sin estos alias esos productos se quedarían
+// sin dibujo de taza y sin descripción. Se aceptan ambas grafías.
+const ALIAS = {
+  coldbreu: 'coldbrew',
+  carajillobayleystiamaria: 'carajillobaileystiamaria',
+  cafedefiltromokamaster: 'cafedefiltromoccamaster',
+  cafehielobayleys: 'cafehielobaileys',
+  conbayleys: 'conbaileys',
+  connatabayleys: 'connataybaileys',
+  zumonaranja: 'zumodenaranja',
+  zumomango: 'zumodemango',
+  caseras: 'tartascaseras',
+  caserasveganas: 'tartascaserasveganas',
+};
+const claveProd = s => { const k = clave(s); return ALIAS[k] || k; };
+
+// Reindexa un objeto por clave normalizada.
+const porClave = (obj, fn) => Object.keys(obj).reduce((a, k) => (a[(fn || clave)(k)] = obj[k], a), {});
+
+// "1,40 €" → 1.4  ·  "2" → 2  ·  "1.234,50" → 1234.5
+function precioNum(v) {
+  const s = String(v ?? '').replace(/[^\d.,-]/g, '').trim();
+  if (!s) return NaN;
+  return parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
+}
+
+// ── Ilustraciones de categoría ─────────────────────────────────────────────
+// PNG con transparencia real (sin fondo negro), recortados y reescalados a 512 px
+// en uploads/cat/ desde los originales de 2000 px que siguen en uploads/.
+const ILUSTRACIONES = {
+  'Café': 'uploads/cat/2.png',
+  'Chocolate': 'uploads/cat/3.png',
+  'Bebidas': 'uploads/cat/6.png',
+  'Pitufos': 'uploads/cat/4.png',
+  'Dulces': 'uploads/cat/5.png',
+  'Tartas': 'uploads/cat/1.png',
+};
+
+// ── Recipientes: siluetas y zona interior recortable para las capas ────────
+// `dentro` es el clip del líquido; top/bot delimitan la altura útil de la bebida.
+const FORMAS = {
+  taza: {
+    cuerpo: 'M14,22 L58,22 L53,50 Q51,57 36,57 Q21,57 19,50 Z',
+    dentro: 'M17,24.6 L55,24.6 L50.6,49.3 Q49,54.4 36,54.4 Q23,54.4 21.4,49.3 Z',
+    asa: 'M58,26.5 C70,26.5 70,42.5 57.5,43.5',
+    top: 24.6, bot: 54.4, x1: 17, x2: 55,
+  },
+  vaso: {
+    cuerpo: 'M18,24 L54,24 L51,54 Q50,59 36,59 Q22,59 21,54 Z',
+    dentro: 'M20.6,26.5 L51.4,26.5 L48.6,53.4 Q48,56.4 36,56.4 Q24,56.4 23.4,53.4 Z',
+    asa: 'M54,28.5 C64.5,28.5 64.5,42 53,43',
+    top: 26.5, bot: 56.4, x1: 20.6, x2: 51.4,
+  },
+  alto: {
+    cuerpo: 'M20,12 L52,12 L49,58 Q48,63 36,63 Q24,63 23,58 Z',
+    dentro: 'M22.6,14.6 L49.4,14.6 L46.6,57.4 Q46,60.4 36,60.4 Q26,60.4 25.4,57.4 Z',
+    asa: 'M52,17.5 C63,17.5 63,34 51,35',
+    top: 14.6, bot: 60.4, x1: 22.6, x2: 49.4,
+  },
+  botella: {
+    cuerpo: 'M30,7 L42,7 L42,17 Q49,23 49,31 L49,60 Q49,65 44,65 L28,65 Q23,65 23,60 L23,31 Q23,23 30,17 Z',
+    dentro: 'M30.6,19.6 Q25.6,25 25.6,31.4 L25.6,59.6 Q25.6,62.6 28.6,62.6 L43.4,62.6 Q46.4,62.6 46.4,59.6 L46.4,31.4 Q46.4,25 41.4,19.6 Z',
+    top: 19.6, bot: 62.6, x1: 25.6, x2: 46.4, tapon: 1,
+  },
+  lata: {
+    cuerpo: 'M24,15 Q36,12.4 48,15 L48,61 Q36,63.6 24,61 Z',
+    dentro: 'M26.4,17.4 Q36,15.4 45.6,17.4 L45.6,58.6 Q36,60.6 26.4,58.6 Z',
+    top: 17.4, bot: 58.6, x1: 26.4, x2: 45.6,
+  },
+};
+
+// Perfil visual por producto: forma + capas de abajo a arriba [color, peso].
+const PERFILES = {
+  // Café — réplica del cartel «Tipos de café»
+  'Solo': { forma: 'taza', asa: 1, plato: 1, capas: [['#2B160B', .84], ['#C4854A', .16]] },
+  'Con Leche': { forma: 'taza', asa: 1, plato: 1, capas: [['#9C6635', .8], ['#C89152', .2]] },
+  'Bombón': { forma: 'vaso', cristal: 1, capas: [['#E7C685', .32], ['#2B160B', .52], ['#C4854A', .16]] },
+  'Carajillo (Baileys / Tía María)': { forma: 'vaso', cristal: 1, capas: [['#8A5C33', .3], ['#2B160B', .55], ['#C4854A', .15]] },
+  'Cold Brew': { forma: 'alto', cristal: 1, hielo: 1, capas: [['#33200F', 1]] },
+  'Flat White': { forma: 'taza', asa: 1, plato: 1, capas: [['#6E4526', .74], ['#E9DAC1', .26]] },
+  'Capuchino': { forma: 'vaso', cristal: 1, asa: 1, espuma: 1, capas: [['#3A2113', .34], ['#E4D3B8', .4], ['#F5EADA', .26]] },
+  'Café de filtro (Moccamaster)': { forma: 'alto', cristal: 1, asa: 1, capas: [['#452612', 1]] },
+  'Moka': { forma: 'vaso', cristal: 1, capas: [['#3D2115', .3], ['#6E4526', .34], ['#E4D3B8', .22], ['#F5EADA', .14]] },
+  'Café hielo Baileys': { forma: 'alto', cristal: 1, hielo: 1, capas: [['#452612', .68], ['#DEC29B', .32]] },
+  'Té o infusiones': { forma: 'vaso', cristal: 1, asa: 1, capas: [['#B4762D', 1]] },
+  'Té con leche': { forma: 'vaso', cristal: 1, asa: 1, capas: [['#B4762D', .5], ['#E9DAC1', .5]] },
+  'Cola Cao': { forma: 'taza', asa: 1, plato: 1, capas: [['#8A5A34', 1]] },
+  'Vaso de leche': { forma: 'alto', cristal: 1, capas: [['#EDE0C8', 1]] },
+  // Chocolate
+  'A la taza': { forma: 'taza', asa: 1, plato: 1, capas: [['#3D2115', 1]] },
+  'Con nata': { forma: 'taza', asa: 1, plato: 1, nata: 1, capas: [['#3D2115', 1]] },
+  'Con Baileys': { forma: 'taza', asa: 1, plato: 1, capas: [['#3D2115', .78], ['#C9A578', .22]] },
+  'Con nata y Baileys': { forma: 'taza', asa: 1, plato: 1, nata: 1, capas: [['#3D2115', .78], ['#C9A578', .22]] },
+  // Bebidas
+  'Agua': { forma: 'botella', cristal: 1, capas: [['#CFE3EC', 1]] },
+  'Agua con gas': { forma: 'botella', cristal: 1, burbujas: 1, capas: [['#C6DFEA', 1]] },
+  'Refrescos': { forma: 'lata', opaco: 1, capas: [['#8C3226', 1]] },
+  'Estrella Galicia tercio': { forma: 'botella', opaco: 1, capas: [['#3E2A10', 1]] },
+  'Estrella Galicia 0,0': { forma: 'botella', opaco: 1, capas: [['#4E3716', 1]] },
+  'Zumo de naranja': { forma: 'alto', cristal: 1, capas: [['#E08A22', 1]] },
+  'Zumo piña / melocotón': { forma: 'botella', cristal: 1, capas: [['#E9BE4B', 1]] },
+  'Zumo de mango': { forma: 'botella', cristal: 1, capas: [['#E79A31', 1]] },
+  'Batidos': { forma: 'alto', cristal: 1, capas: [['#C9A47C', 1]] },
+};
+
+// El tamaño del dibujo es proporcional a los ml reales de la variante.
+const ML_ALIAS = { botellin: 200, estandar: 330 };
+function escalaMl(variante) {
+  const m = /(\d+)\s*ml/i.exec(variante || '');
+  const n = m ? +m[1] : (ML_ALIAS[clave(variante)] || 180);
+  return Math.max(.6, Math.min(1.12, .6 + (n - 70) / 160 * .36));
+}
+
+const PERFILES_K = porClave(PERFILES, claveProd);
+
+// Dibuja el recipiente completo: asa, plato, cuerpo, capas de bebida, espuma/hielo y contorno.
+function dibujarVaso(nombre, variante, uid) {
+  const P = PERFILES_K[claveProd(nombre)];
+  if (!P) return null;
+  const F = FORMAS[P.forma];
+  const cid = 'vs-' + uid;
+  const trazo = P.opaco ? '#5C4126' : '#B29470';
+  const alto = F.bot - F.top;
+  const k = [];
+
+  k.push(R('defs', { key: 'def' }, R('clipPath', { id: cid }, R('path', { d: F.dentro }))));
+  if (P.asa && F.asa) k.push(R('path', { key: 'asa', d: F.asa, fill: 'none', stroke: trazo, strokeWidth: 3.2, strokeLinecap: 'round' }));
+  if (P.plato) {
+    k.push(R('ellipse', { key: 'pl', cx: 36, cy: 61.5, rx: 27.5, ry: 5.4, fill: '#EFE5D2', stroke: trazo, strokeWidth: 1.3 }));
+    k.push(R('ellipse', { key: 'pl2', cx: 36, cy: 60.4, rx: 15, ry: 2.6, fill: 'none', stroke: 'rgba(178,148,112,.45)', strokeWidth: 1 }));
+  }
+  k.push(R('path', { key: 'bg', d: F.cuerpo, fill: P.opaco ? P.capas[0][0] : (P.cristal ? 'rgba(255,255,255,.62)' : '#F7F1E5') }));
+
+  if (P.opaco) {
+    k.push(R('g', { key: 'et', clipPath: 'url(#' + cid + ')' },
+      R('rect', { x: 0, y: (F.top + F.bot) / 2 - 7, width: 72, height: 14, fill: 'rgba(255,255,255,.20)' })));
+  } else {
+    const tot = P.capas.reduce((a, c) => a + c[1], 0);
+    let y = F.bot;
+    const bandas = P.capas.map((c, i) => {
+      const h = alto * c[1] / tot;
+      y -= h;
+      return R('rect', { key: i, x: 0, y: y, width: 72, height: h + .6, fill: c[0] });
+    });
+    k.push(R('g', { key: 'liq', clipPath: 'url(#' + cid + ')' }, bandas));
+  }
+
+  if (P.hielo) k.push(R('g', { key: 'ice', clipPath: 'url(#' + cid + ')' },
+    R('rect', { key: 1, x: 25.5, y: F.top + 3, width: 11, height: 11, rx: 2.4, fill: '#FFFFFF', opacity: .42, transform: 'rotate(-14 31 ' + (F.top + 8.5) + ')' }),
+    R('rect', { key: 2, x: 35.5, y: F.top + 11, width: 10, height: 10, rx: 2.2, fill: '#FFFFFF', opacity: .32, transform: 'rotate(16 40.5 ' + (F.top + 16) + ')' })));
+
+  if (P.burbujas) k.push(R('g', { key: 'bu', clipPath: 'url(#' + cid + ')', fill: '#FFFFFF', opacity: .5 },
+    R('circle', { key: 1, cx: 32, cy: F.top + 11, r: 1.6 }),
+    R('circle', { key: 2, cx: 39.5, cy: F.top + 19, r: 1.2 }),
+    R('circle', { key: 3, cx: 33.5, cy: F.top + 26, r: 1.9 }),
+    R('circle', { key: 4, cx: 40, cy: F.top + 33, r: 1.3 })));
+
+  if (P.espuma) k.push(R('path', {
+    key: 'esp', fill: '#F9F2E3', stroke: '#DCC7A6', strokeWidth: 1.1,
+    d: 'M' + (F.x1 + 1.5) + ',' + (F.top + 1) + ' Q36,' + (F.top - 13) + ' ' + (F.x2 - 1.5) + ',' + (F.top + 1) + ' Z',
+  }));
+
+  if (P.nata) {
+    k.push(R('path', {
+      key: 'na', fill: '#FDF8EF', stroke: '#DCC7A6', strokeWidth: 1.1,
+      d: 'M' + (F.x1 + .5) + ',' + (F.top + 1) + ' Q36,' + (F.top - 13) + ' ' + (F.x2 - .5) + ',' + (F.top + 1) + ' Z',
+    }));
+    k.push(R('path', {
+      key: 'na2', fill: 'none', stroke: '#DCC7A6', strokeWidth: 1.1, strokeLinecap: 'round',
+      d: 'M32.4,' + (F.top - 7.5) + ' q3.6,-6 7.2,-1.2',
+    }));
+  }
+
+  k.push(R('path', { key: 'ln', d: F.cuerpo, fill: 'none', stroke: trazo, strokeWidth: 1.6, strokeLinejoin: 'round' }));
+  if (P.cristal) k.push(R('path', {
+    key: 'hl', fill: 'none', stroke: 'rgba(255,255,255,.7)', strokeWidth: 2.4, strokeLinecap: 'round',
+    d: 'M' + (F.x1 + 3) + ',' + (F.top + 5) + ' L' + (F.x1 + 2.2) + ',' + (F.bot - 8),
+  }));
+  if (F.tapon) k.push(R('rect', { key: 'tp', x: 28.4, y: 3.4, width: 15.2, height: 5.4, rx: 1.8, fill: P.opaco ? '#5C4126' : '#8A5A34' }));
+
+  // Escalado desde la base para que todos los recipientes se apoyen en la misma línea.
+  return R('svg', { className: 'p-vaso__art', viewBox: '0 0 72 70', 'aria-hidden': 'true' },
+    R('g', { transform: 'translate(36,67) scale(' + escalaMl(variante).toFixed(3) + ') translate(-36,-67)' }, k));
+}
+
+// Categorías que se presentan con recipiente dibujado + mililitros.
+const CON_VASO = { 'Café': 1, 'Chocolate': 1, 'Bebidas': 1 };
+const CON_VASO_K = porClave(CON_VASO);
+const ILUSTRACIONES_K = porClave(ILUSTRACIONES);
+
+// ── Carga de la carta desde el CSV publicado ──────────────────────────────
+// Descarga el CSV y lo convierte en array de objetos con Papa.parse.
+async function descargarCSV(url) {
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' al leer el CSV');
+  const { data, errors } = Papa.parse(await res.text(), {
+    header: true,
+    skipEmptyLines: 'greedy',
+    transformHeader: h => String(h).replace(/^﻿/, '').trim(),
+  });
+  if (errors && errors.length) console.warn('[carta] avisos de Papa.parse:', errors.slice(0, 3));
+  return data;
+}
+
+// Aplana el CSV a: [{ categoria, productos: [{ nombre, variantes: [{ etiqueta, precio }] }] }]
+// Agrupa por Categoría → Producto y acumula las variantes dentro de cada producto,
+// conservando el orden de aparición en la hoja.
+function agruparCarta(filas) {
+  const carta = [], iCat = {};
+  for (const f of filas) {
+    const categoria = String(f[COLS.cat] ?? '').trim();
+    const nombre = String(f[COLS.prod] ?? '').trim();
+    if (!categoria || !nombre) continue;
+    const precio = precioNum(f[COLS.precio]);
+    if (!Number.isFinite(precio)) continue;
+
+    const kc = clave(categoria);
+    if (!(kc in iCat)) { iCat[kc] = carta.length; carta.push({ categoria, productos: [], _iProd: {} }); }
+    const cat = carta[iCat[kc]];
+
+    const kp = claveProd(nombre);
+    if (!(kp in cat._iProd)) { cat._iProd[kp] = cat.productos.length; cat.productos.push({ nombre, variantes: [] }); }
+
+    const etiqueta = String(f[COLS.var] ?? '').trim();
+    cat.productos[cat._iProd[kp]].variantes.push({
+      etiqueta: clave(etiqueta) === 'estandar' ? '' : etiqueta,
+      precio,
+    });
+  }
+  carta.forEach(c => { delete c._iProd; });
+  return carta;
+}
+
 class Component extends DCLogic {
-  state = { cat: null, filas: [], descs: {} };
+  state = { carta: [], descs: {}, fase: 'idle' };
   heroRef = React.createRef();
   cupRef = React.createRef();
   beansFarRef = React.createRef();
   beansNearRef = React.createRef();
   stackRef = React.createRef();
+  // La carta viene del CSV publicado. Las descripciones no están en la hoja, así que
+  // se siguen leyendo de menu-data.js, que además hace de copia de seguridad si la red falla.
+  async cargarCarta() {
+    let descs = {};
+    try {
+      const m = await import('./menu-data.js');
+      descs = porClave(m.DESCRIPCIONES || {}, claveProd);
+    } catch (e) { console.warn('[carta] sin descripciones locales:', e); }
+
+    try {
+      const carta = agruparCarta(await descargarCSV(CSV_URL));
+      if (!carta.length) throw new Error('el CSV no ha devuelto filas utilizables');
+      this.setState({ carta, descs });
+    } catch (e) {
+      console.error('[carta] fallo al leer el CSV, se usa la copia local:', e);
+      try {
+        const m = await import('./menu-data.js');
+        const filas = m.FILAS.map(r => ({ [COLS.cat]: r[0], [COLS.prod]: r[1], [COLS.var]: r[2], [COLS.precio]: r[3] }));
+        this.setState({ carta: agruparCarta(filas), descs });
+      } catch (e2) { console.error('[carta] tampoco hay copia local:', e2); }
+    }
+  }
   componentDidMount() {
-    import('./menu-data.js').then(m => this.setState({ filas: m.FILAS, descs: m.DESCRIPCIONES }));
+    this.cargarCarta();
     // Card stack de reseñas: escala las tarjetas anteriores según el progreso de scroll
     this._stackTick = () => {
       const wrap = this.stackRef.current; if (!wrap) return;
@@ -694,7 +1479,31 @@ class Component extends DCLogic {
     };
     window.addEventListener('mousemove', this._onMove, { passive: true });
   }
+  // Cambio de vista de la carta en tres tiempos: salida → intercambio → entrada.
+  // Los 300 ms coinciden con la transición de .carta-view, así que nunca se ve el corte.
+  irA(cat) {
+    if (this._sw) return;
+    this.setState({ fase: 'saliendo' });
+    this._sw = setTimeout(() => {
+      this._sw = null;
+      this.setState({ cat: cat, fase: 'entrando' });
+      const s = document.getElementById('carta');
+      if (s && s.getBoundingClientRect().top < -8) s.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Dos frames dan tiempo a que el navegador confirme el estado "entrando" antes de
+      // animar la entrada. El temporizador es la red de seguridad: en una pestaña oculta
+      // rAF no se dispara y la carta se quedaría invisible.
+      const revelar = () => {
+        if (!this._rv) return;
+        clearTimeout(this._rv); this._rv = null;
+        this.setState({ fase: 'idle' });
+      };
+      this._rv = setTimeout(revelar, 160);
+      requestAnimationFrame(() => requestAnimationFrame(revelar));
+    }, 300);
+  }
   componentWillUnmount() {
+    if (this._sw) clearTimeout(this._sw);
+    if (this._rv) clearTimeout(this._rv);
     window.removeEventListener('mousemove', this._onMove);
     window.removeEventListener('scroll', this._onStackScroll);
     window.removeEventListener('resize', this._onStackScroll);
@@ -702,27 +1511,41 @@ class Component extends DCLogic {
     if (this._sraf) cancelAnimationFrame(this._sraf);
   }
   renderVals() {
-    const filas = this.state.filas;
-    const cats = [...new Set(filas.map(r => r[0]))];
+    const carta = this.state.carta;
+    const cats = carta.map(c => c.categoria);
     const cartaCompleta = this.props.cartaCompleta ?? false;
-    const active = this.state.cat ?? this.props.categoriaInicial ?? cats[0];
+    // `state.cat` sin definir = aún no ha tocado nada → manda la prop (o la cuadrícula).
+    const inicial = this.props.categoriaInicial;
+    const activa = this.state.cat !== undefined
+      ? this.state.cat
+      : (cats.includes(inicial) ? inicial : null);
     const fmt = n => n.toFixed(2).replace('.', ',') + ' €';
+    // Convierte la categoría ya agrupada en las tarjetas que espera la plantilla.
     const grupos = cat => {
-      const out = [], idx = {};
-      for (const [c, nombre, variante, precio] of filas) {
-        if (c !== cat) continue;
-        if (!(nombre in idx)) { idx[nombre] = out.length; out.push({ nombre, desc: this.state.descs[nombre] || false, variantes: [] }); }
-        out[idx[nombre]].variantes.push({ etiqueta: variante === 'Estándar' ? '' : variante, precio: fmt(precio) });
-      }
-      return out;
+      const conVaso = !!CON_VASO_K[clave(cat)];
+      const sec = carta.find(c => c.categoria === cat);
+      if (!sec) return [];
+      return sec.productos.map((p, iP) => ({
+        nombre: p.nombre,
+        desc: this.state.descs[claveProd(p.nombre)] || false,
+        conVaso, simple: !conVaso, i: Math.min(iP, 16),
+        clase: 'p-card ' + (conVaso ? 'p-card--vaso' : 'p-card--simple'),
+        variantes: p.variantes.map((v, iV) => ({
+          etiqueta: v.etiqueta,
+          precio: fmt(v.precio),
+          vaso: conVaso ? dibujarVaso(p.nombre, v.etiqueta, clave(cat) + '-' + iP + '-' + iV) : null,
+        })),
+      }));
     };
-    const secciones = (cartaCompleta ? cats : cats.includes(active) ? [active] : cats.slice(0, 1))
-      .map(c => ({ titulo: c, mostrarTitulo: cartaCompleta, grupos: grupos(c) }));
-    const tabs = cats.map(c => ({
-      label: c,
-      bg: c === active ? '#26160E' : 'transparent',
-      fg: c === active ? '#F1E7D6' : '#6b5340',
-      pick: () => this.setState({ cat: c }),
+    const secciones = (cartaCompleta ? cats : (activa ? [activa] : []))
+      .map(c => ({
+        titulo: c, mostrarTitulo: cartaCompleta, grupos: grupos(c),
+        min: CON_VASO_K[clave(c)] ? 'min(100%,300px)' : 'min(100%,240px)',
+      }));
+    const categorias = cats.map((c, i) => ({
+      label: c, i, img: ILUSTRACIONES_K[clave(c)] || ILUSTRACIONES['Café'],
+      aria: 'Ver la carta de ' + c,
+      abrir: () => this.irA(c),
     }));
     const reviews = [
       { quote: '«Un lugar acogedor con el mejor café que he probado en Málaga, una super atención. Tanto los pasteles caseros como los bocadillos riquísimos. Muy recomendable para desayunar o merendar.»', name: 'Silvia ERomero', meta: 'Local Guide · 15 reseñas · Google', initial: 'S', when: 'Hace 4 meses', nueva: false, bg: '#593921' },
@@ -732,7 +1555,13 @@ class Component extends DCLogic {
       { quote: '«Fui ayer, y he vuelto hoy… Todo riquísimo, buen precio, simpatía, buen trato, todo muy rápido… Volveré obviamente cuando vaya a Málaga.»', name: 'La fortaleza vegana', meta: 'Local Guide · 88 reseñas · Google', initial: 'L', when: 'Hace 6 días', nueva: true, bg: '#593921' },
     ];
     return {
-      tabs, secciones, mostrarTabs: !cartaCompleta && tabs.length > 0,
+      secciones, categorias,
+      fase: this.state.fase,
+      verCategorias: !cartaCompleta && activa == null && cats.length > 0,
+      verProductos: cartaCompleta || activa != null,
+      mostrarVolver: !cartaCompleta && activa != null,
+      catActiva: activa || '',
+      volver: () => this.irA(null),
       heroRef: this.heroRef, cupRef: this.cupRef,
       beansFarRef: this.beansFarRef, beansNearRef: this.beansNearRef,
       stackRef: this.stackRef, reviews,
