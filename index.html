@@ -435,6 +435,67 @@
           transform: translateX(-3px)
         }
 
+        /* ── FAB "volver a categorías" — solo móvil ─────────────────────────────
+           Vive fuera de .carta-view a propósito: esa capa lleva transform y
+           will-change:transform, y cualquiera de los dos crearía un bloque
+           contenedor que anclaría el botón fixed a la tarjeta en vez de a la
+           pantalla. En escritorio ni siquiera se pinta (display:none). */
+        .fab-volver {
+          display: none
+        }
+
+        @media(max-width:860px) {
+          .fab-volver {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            left: 20px;
+            bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+            z-index: 90;
+            width: 56px;
+            height: 56px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(15, 9, 5, .92);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            color: #F1E7D6;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            box-shadow: 0 12px 30px rgba(10, 9, 8, .38);
+            /* Estado de reposo = oculto. El JS decide cuándo mostrarlo. */
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(12px) scale(.9);
+            transition: opacity .3s ease, transform .42s cubic-bezier(.32, .72, 0, 1), visibility .3s
+          }
+
+          .fab-volver svg {
+            display: block;
+            flex: none
+          }
+
+          /* Visible solo si coinciden las dos condiciones: estamos dentro de una
+             categoría (data-activo) y el usuario ya ha bajado lo bastante como
+             para haber perdido de vista el botón original (.carta-fab-on). */
+          html.carta-fab-on .fab-volver[data-activo="si"] {
+            opacity: 1;
+            visibility: visible;
+            transform: none
+          }
+
+          html.carta-fab-on .fab-volver[data-activo="si"]:active {
+            transform: scale(.92)
+          }
+
+          .fab-volver:focus-visible {
+            outline: 2px solid #C6853F;
+            outline-offset: 3px
+          }
+        }
+
         .carta-cat-title {
           margin: 0;
           font-family: 'Oswald', sans-serif;
@@ -641,7 +702,8 @@
           .cat-card__icon,
           .p-card,
           .p-vaso__art,
-          .btn-volver {
+          .btn-volver,
+          .fab-volver {
             transition: none !important;
             animation: none !important
           }
@@ -1155,6 +1217,17 @@
         <a href="https://instagram.com/100_coffee_mlg" target="_blank" rel="noopener"
           style="font-size:13px;letter-spacing:1px;color:#C6853F" style-hover="color:#E09A4C">@100_coffee_mlg</a>
       </footer>
+
+      <!-- Atajo flotante (solo móvil) al mismo `volver` que el botón de la toolbar.
+           Se queda siempre montado —no va dentro de un sc-if— para que al pulsarlo
+           le dé tiempo a desvanecerse en lugar de desaparecer de golpe. -->
+      <button type="button" class="fab-volver" data-activo="{{ fabActivo }}" onClick="{{ volver }}"
+        aria-label="Volver a categorías" title="Volver a categorías">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M19 12H5m6.5-7L5 12l6.5 7" />
+        </svg>
+      </button>
     </div>
   </x-dc>
   <script type="text/x-dc" data-dc-script data-props="{
@@ -1478,6 +1551,22 @@ class Component extends DCLogic {
       this._mraf = settled ? 0 : requestAnimationFrame(this._tick);
     };
     window.addEventListener('mousemove', this._onMove, { passive: true });
+    // FAB "volver a categorías": el umbral se mide contra la propia sección de la
+    // carta, no contra el documento, porque lo que queremos detectar es justo el
+    // momento en que el botón de la toolbar sale de pantalla por arriba. El límite
+    // inferior lo retira al acabar la carta para que no flote sobre las reseñas.
+    this._fabTick = () => {
+      const s = document.getElementById('carta');
+      if (!s) return;
+      const r = s.getBoundingClientRect();
+      document.documentElement.classList.toggle('carta-fab-on', r.top < -170 && r.bottom > 140);
+    };
+    this._onFabScroll = () => {
+      if (!this._fraf) this._fraf = requestAnimationFrame(() => { this._fraf = 0; this._fabTick(); });
+    };
+    window.addEventListener('scroll', this._onFabScroll, { passive: true });
+    window.addEventListener('resize', this._onFabScroll);
+    this._fabTick();
   }
   // Cambio de vista de la carta en tres tiempos: salida → intercambio → entrada.
   // Los 300 ms coinciden con la transición de .carta-view, así que nunca se ve el corte.
@@ -1507,8 +1596,12 @@ class Component extends DCLogic {
     window.removeEventListener('mousemove', this._onMove);
     window.removeEventListener('scroll', this._onStackScroll);
     window.removeEventListener('resize', this._onStackScroll);
+    window.removeEventListener('scroll', this._onFabScroll);
+    window.removeEventListener('resize', this._onFabScroll);
+    document.documentElement.classList.remove('carta-fab-on');
     if (this._mraf) cancelAnimationFrame(this._mraf);
     if (this._sraf) cancelAnimationFrame(this._sraf);
+    if (this._fraf) cancelAnimationFrame(this._fraf);
   }
   renderVals() {
     const carta = this.state.carta;
@@ -1560,6 +1653,9 @@ class Component extends DCLogic {
       verCategorias: !cartaCompleta && activa == null && cats.length > 0,
       verProductos: cartaCompleta || activa != null,
       mostrarVolver: !cartaCompleta && activa != null,
+      // El FAB está siempre en el DOM; este flag es el que el CSS mira para
+      // dejarlo entrar o sacarlo con un fundido.
+      fabActivo: (!cartaCompleta && activa != null) ? 'si' : 'no',
       catActiva: activa || '',
       volver: () => this.irA(null),
       heroRef: this.heroRef, cupRef: this.cupRef,
