@@ -4,6 +4,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- React y ReactDOM servidos desde el propio dominio en lugar de unpkg.com.
+       support.js los pide por CDN, pero consulta window.__resources antes de decidir
+       la URL, así que basta con redirigirlos aquí. Toda la página la pinta React: si
+       unpkg cae o va lento, antes no se renderizaba absolutamente nada. Los ficheros
+       de vendor/ son los originales sin modificar (su SHA-384 coincide con los SRI
+       que el propio support.js tiene codificados). -->
+  <script>
+    window.__resources = {
+      'https://unpkg.com/react@18.3.1/umd/react.production.min.js': './vendor/react.production.min.js',
+      'https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js': './vendor/react-dom.production.min.js'
+    };
+  </script>
+
+  <!-- Datos de la carta: script clásico y síncrono, sin import() ni promesas.
+       Deja window.MENU_DATA listo ANTES de que arranque el componente, para que la
+       carta tenga siempre contenido que pintar sin depender de ninguna red. -->
+  <script src="./menu-data.js"></script>
+
   <script src="./support.js"></script>
 </head>
 
@@ -15,7 +34,10 @@
       <link
         href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Jost:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Caveat:wght@500;600&display=swap"
         rel="stylesheet">
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+      <!-- La hoja publicada responde con un 307 hacia googleusercontent.com, así que
+           la actualización de precios paga dos handshakes. Adelantarlos recorta la
+           espera; ya no bloquea nada, pero sigue siendo la petición más lenta. -->
+      <link rel="preconnect" href="https://docs.google.com">
       <style>
         html {
           scroll-behavior: smooth
@@ -294,6 +316,21 @@
         .carta-view[data-fase="idle"] .p-card {
           animation: cartaPop .62s cubic-bezier(.32, .72, 0, 1) backwards;
           animation-delay: calc(var(--i, 0) * 32ms)
+        }
+
+        /* Con movimiento reducido no se difiere nada: "backwards" mantiene las tarjetas
+           a opacity 0 durante todo el animation-delay (hasta ~0,5 s en la última), y
+           quien pide menos animación no debería esperar a ver los precios. */
+        @media (prefers-reduced-motion: reduce) {
+
+          .carta-view {
+            transition: none
+          }
+
+          .carta-view[data-fase="idle"] .cat-card,
+          .carta-view[data-fase="idle"] .p-card {
+            animation: none
+          }
         }
 
         /* ── Estado inicial: cuadrícula de 6 categorías ── */
@@ -777,7 +814,11 @@
     </helmet>
     <div style="font-family:'Jost',sans-serif;background:#F1E7D6;color:#26160E">
 
-      <x-import component="KineticMenu" from="./kinetic-menu.jsx" hint-size="100%,0px"></x-import>
+      <!-- Apunta al .js precompilado, no al .jsx: support.js solo descarga
+           @babel/standalone (3,0 MB) y compila en el navegador cuando la extensión es
+           .jsx/.tsx. La fuente sigue siendo kinetic-menu.jsx; para regenerar el .js:
+           node tools/build-kinetic-menu.mjs -->
+      <x-import component="KineticMenu" from="./kinetic-menu.js" hint-size="100%,0px"></x-import>
 
       <!-- Hero: composición negra con taza, granos en parallax (mousemove) y marquee inferior -->
       <header id="top" ref="{{ heroRef }}" data-screen-label="Hero" class="hero"
@@ -1435,18 +1476,69 @@ const CON_VASO = { 'Café': 1, 'Chocolate': 1, 'Bebidas': 1 };
 const CON_VASO_K = porClave(CON_VASO);
 const ILUSTRACIONES_K = porClave(ILUSTRACIONES);
 
+// ── Copia local de la carta ───────────────────────────────────────────────
+// menu-data.js es un script clásico del <head>: window.MENU_DATA ya existe aquí, de
+// forma síncrona. Es la fuente del primer render, no un plan B que solo se usa si
+// algo falla, y por eso la carta nunca puede salir vacía.
+const LOCAL = (typeof window !== 'undefined' && window.MENU_DATA) || { FILAS: [], DESCRIPCIONES: {} };
+
+// Pasa FILAS (4 columnas) al mismo formato de objeto que devuelve el CSV,
+// para que agruparCarta() no tenga que distinguir de dónde vienen los datos.
+const filasLocales = () => (LOCAL.FILAS || []).map(r => ({
+  [COLS.cat]: r[0], [COLS.prod]: r[1], [COLS.var]: r[2], [COLS.precio]: r[3],
+}));
+
 // ── Carga de la carta desde el CSV publicado ──────────────────────────────
-// Descarga el CSV y lo convierte en array de objetos con Papa.parse.
+// Parser de CSV mínimo según RFC 4180: comillas dobles, "" escapada y saltos de línea
+// dentro de comillas. Sustituye a PapaParse para no depender de cdnjs en el arranque
+// y para eliminar la carrera en la que `Papa` todavía no existía al montar el
+// componente (el <script> del helmet no está sincronizado con componentDidMount).
+function parsearCSV(texto) {
+  const filas = [];
+  let fila = [], campo = '', entrecomillado = false;
+  const t = String(texto).replace(/^﻿/, '');
+  const cerrarFila = () => {
+    fila.push(campo); campo = '';
+    if (fila.some(v => v !== '')) filas.push(fila);
+    fila = [];
+  };
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (entrecomillado) {
+      if (c !== '"') { campo += c; continue; }
+      if (t[i + 1] === '"') { campo += '"'; i++; } else entrecomillado = false;
+    } else if (c === '"') entrecomillado = true;
+    else if (c === ',') { fila.push(campo); campo = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && t[i + 1] === '\n') i++;
+      cerrarFila();
+    } else campo += c;
+  }
+  cerrarFila();
+  if (!filas.length) return [];
+  const cabecera = filas.shift().map(h => String(h).replace(/^﻿/, '').trim());
+  return filas.map(f => cabecera.reduce((o, h, i) => (o[h] = f[i] ?? '', o), {}));
+}
+
+// Un fetch colgado no se rechaza nunca por sí solo: sin este corte, una red móvil
+// que abre la conexión y no responde dejaba la promesa viva para siempre, el catch
+// no llegaba a ejecutarse y la carta se quedaba en blanco de forma indefinida.
+const CSV_TIMEOUT_MS = 6000;
+
 async function descargarCSV(url) {
-  const res = await fetch(url, { cache: 'no-cache' });
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' al leer el CSV');
-  const { data, errors } = Papa.parse(await res.text(), {
-    header: true,
-    skipEmptyLines: 'greedy',
-    transformHeader: h => String(h).replace(/^﻿/, '').trim(),
-  });
-  if (errors && errors.length) console.warn('[carta] avisos de Papa.parse:', errors.slice(0, 3));
-  return data;
+  const ac = new AbortController();
+  const corte = setTimeout(() => ac.abort(), CSV_TIMEOUT_MS);
+  try {
+    // Sin `cache: 'no-cache'`: la respuesta final de la hoja trae `max-age=300`, así
+    // que dejar que el navegador la reutilice ahorra los dos saltos de red completos
+    // al recargar. Forzar revalidación era justo lo que hacía que refrescar fuese el
+    // caso más lento y más propenso a quedarse esperando.
+    const res = await fetch(url, { signal: ac.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' al leer el CSV');
+    return parsearCSV(await res.text());
+  } finally {
+    clearTimeout(corte);
+  }
 }
 
 // Aplana el CSV a: [{ categoria, productos: [{ nombre, variantes: [{ etiqueta, precio }] }] }]
@@ -1479,32 +1571,33 @@ function agruparCarta(filas) {
 }
 
 class Component extends DCLogic {
-  state = { carta: [], descs: {}, fase: 'idle' };
+  // El estado nace ya poblado con la copia local, que está en memoria de forma
+  // síncrona. La carta se pinta completa en el primer frame; ninguna petición de red
+  // participa en que haya contenido o no. Antes esto era `carta: []`, y con la lista
+  // vacía la plantilla no cumple ni verCategorias ni verProductos: de ahí el bloque
+  // completamente en blanco bajo el título mientras el CSV no contestara.
+  state = {
+    carta: agruparCarta(filasLocales()),
+    descs: porClave(LOCAL.DESCRIPCIONES || {}, claveProd),
+    fase: 'idle',
+  };
   heroRef = React.createRef();
   cupRef = React.createRef();
   beansFarRef = React.createRef();
   beansNearRef = React.createRef();
   stackRef = React.createRef();
-  // La carta viene del CSV publicado. Las descripciones no están en la hoja, así que
-  // se siguen leyendo de menu-data.js, que además hace de copia de seguridad si la red falla.
+  // El CSV publicado es una mejora progresiva, no un requisito: sirve para que el
+  // cliente pueda tocar precios desde la hoja sin desplegar. Si tarda, falla, lo corta
+  // el timeout o sencillamente no vuelve, el usuario ya lleva rato viendo la carta
+  // local completa y no llega a notarlo. Las descripciones no están en la hoja, así
+  // que siempre salen de menu-data.js y no se tocan aquí.
   async cargarCarta() {
-    let descs = {};
-    try {
-      const m = await import('./menu-data.js');
-      descs = porClave(m.DESCRIPCIONES || {}, claveProd);
-    } catch (e) { console.warn('[carta] sin descripciones locales:', e); }
-
     try {
       const carta = agruparCarta(await descargarCSV(CSV_URL));
       if (!carta.length) throw new Error('el CSV no ha devuelto filas utilizables');
-      this.setState({ carta, descs });
+      this.setState({ carta });
     } catch (e) {
-      console.error('[carta] fallo al leer el CSV, se usa la copia local:', e);
-      try {
-        const m = await import('./menu-data.js');
-        const filas = m.FILAS.map(r => ({ [COLS.cat]: r[0], [COLS.prod]: r[1], [COLS.var]: r[2], [COLS.precio]: r[3] }));
-        this.setState({ carta: agruparCarta(filas), descs });
-      } catch (e2) { console.error('[carta] tampoco hay copia local:', e2); }
+      console.warn('[carta] no se pudo leer el CSV; se mantiene la copia local:', e);
     }
   }
   componentDidMount() {

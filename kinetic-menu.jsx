@@ -1,12 +1,27 @@
 // Menú kinetic GSAP — adaptado a la marca 100% COFFEE (lógica de animación original intacta).
 const { useEffect, useRef, useState } = React;
 
-function ensureScript(src) {
+// Resuelve SIEMPRE, con true/false según haya cargado el script o no.
+// Antes solo escuchaba 'load': si el CDN devolvía error la promesa se quedaba viva
+// para siempre, `ready` nunca pasaba a true y el menú dejaba de abrirse en silencio.
+// El temporizador cubre el caso peor, una red que acepta la conexión y no contesta:
+// ahí tampoco llega a dispararse 'error'.
+function ensureScript(src, timeoutMs = 5000) {
   return new Promise(res => {
+    let hecho = false;
+    const fin = ok => { if (!hecho) { hecho = true; res(ok); } };
+    setTimeout(() => fin(false), timeoutMs);
     const existing = [...document.scripts].find(s => s.src === src);
-    if (existing) { if (existing.dataset.loaded) return res(); existing.addEventListener('load', () => res()); return; }
+    if (existing) {
+      if (existing.dataset.loaded) return fin(true);
+      existing.addEventListener('load', () => fin(true));
+      existing.addEventListener('error', () => fin(false));
+      return;
+    }
     const s = document.createElement('script');
-    s.src = src; s.onload = () => { s.dataset.loaded = '1'; res(); };
+    s.src = src;
+    s.onload = () => { s.dataset.loaded = '1'; fin(true); };
+    s.onerror = () => fin(false);
     document.head.appendChild(s);
   });
 }
@@ -56,18 +71,24 @@ function KineticMenu() {
     (async () => {
       await ensureScript('https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js');
       await ensureScript('https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/CustomEase.min.js');
-      if (!alive || !window.gsap) return;
+      if (!alive) return;
       const gsap = window.gsap;
-      try {
-        if (window.CustomEase) gsap.registerPlugin(window.CustomEase);
-        if (!gsap.parseEase('main')) {
-          window.CustomEase.create('main', '0.65, 0.01, 0.05, 0.99');
+      if (gsap) {
+        try {
+          if (window.CustomEase) gsap.registerPlugin(window.CustomEase);
+          if (!gsap.parseEase('main')) {
+            window.CustomEase.create('main', '0.65, 0.01, 0.05, 0.99');
+          }
+          gsap.defaults({ ease: 'main', duration: 0.7 });
+        } catch (e) {
+          console.warn('CustomEase failed to load, falling back to default.', e);
+          gsap.defaults({ ease: 'power2.out', duration: 0.7 });
         }
-        gsap.defaults({ ease: 'main', duration: 0.7 });
-      } catch (e) {
-        console.warn('CustomEase failed to load, falling back to default.', e);
-        gsap.defaults({ ease: 'power2.out', duration: 0.7 });
+      } else {
+        console.warn('[menu] GSAP no disponible: el menú funciona sin animación.');
       }
+      // Se marca listo haya GSAP o no. La animación es un adorno; abrir y cerrar el
+      // menú no puede quedar condicionado a que responda un CDN de terceros.
       setReady(true);
     })();
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -79,6 +100,7 @@ function KineticMenu() {
   useEffect(() => {
     if (!ready || !containerRef.current) return;
     const gsap = window.gsap;
+    if (!gsap) return;   // sin GSAP no hay formas de fondo; el menú sigue siendo usable
     const ctx = gsap.context(() => {
       const menuItems = containerRef.current.querySelectorAll('.menu-list-item[data-shape]');
       const shapesContainer = containerRef.current.querySelector('.ambient-background-shapes');
@@ -121,6 +143,16 @@ function KineticMenu() {
   useEffect(() => {
     if (!ready || !containerRef.current) return;
     const gsap = window.gsap;
+    // Camino sin GSAP: se abre y se cierra igual, sin la coreografía de entrada.
+    // Es el estado en el que antes el menú se quedaba muerto sin avisar.
+    if (!gsap) {
+      const nw = containerRef.current.querySelector('.nav-overlay-wrapper');
+      if (nw) {
+        nw.setAttribute('data-nav', isMenuOpen ? 'open' : 'closed');
+        nw.style.display = isMenuOpen ? 'block' : 'none';
+      }
+      return;
+    }
     const ctx = gsap.context(() => {
       const navWrap = containerRef.current.querySelector('.nav-overlay-wrapper');
       const menu = containerRef.current.querySelector('.menu-content');
